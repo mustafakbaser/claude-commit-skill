@@ -12,9 +12,15 @@ A Claude Code skill that analyzes your git changes and creates well-structured c
 
 ## Installation
 
+Clone the repository and copy the skill to your Claude Code skills directory:
+
 ```bash
-claude skill install mustafakbaser/claude-commit-skill
+git clone https://github.com/mustafakbaser/claude-commit-skill.git
+mkdir -p ~/.claude/skills/commit
+cp -r claude-commit-skill/SKILL.md claude-commit-skill/references ~/.claude/skills/commit/
 ```
+
+After copying, restart Claude Code. The `/commit` command will be available globally across all projects.
 
 ## Usage
 
