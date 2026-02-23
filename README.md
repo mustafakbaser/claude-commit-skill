@@ -8,6 +8,7 @@ A Claude Code skill that analyzes your git changes and creates well-structured c
 - **Conventional Commits** — generates `type(scope): description` messages with proper type selection (`feat`, `fix`, `refactor`, `perf`, `chore`, etc.)
 - **Batch commit grouping** — splits unrelated changes into separate commits by module, file affinity, and change intent
 - **Smart file pairing** — keeps related files together (implementation + test, component + styles, manifest + lock file)
+- **Multi-language support** — commit messages in English (default) or Turkish via `-tr` / `-en` flags
 - **Edge case handling** — binary files, large diffs, lock files, merge conflicts, pre-commit hook failures
 
 ## Installation
@@ -28,6 +29,10 @@ After copying, restart Claude Code. The `/commit` command will be available glob
 |---------|----------|
 | `/commit` | Staged changes → single commit. Nothing staged → auto batch mode. |
 | `/commit --all` | Analyze all changes, group related ones into multiple logical commits. |
+| `/commit -tr` | Türkçe commit mesajı |
+| `/commit -en` | English commit (default) |
+| `/commit --all -tr` | Batch mode in Turkish |
+| `/commit --help` | Show available commands and flags |
 
 ### Single Commit Mode
 
@@ -62,7 +67,8 @@ Proposed commits:
 - Imperative mood, max 72 characters
 - Scope derived from the primary module affected
 - No trailing periods, no emoji
-- Optional body for complex changes (5+ files or non-obvious reasoning)
+- Mandatory bullet-point body for all commits
+- `type(scope):` prefix always stays in English regardless of language flag
 
 ## How Batch Grouping Works
 

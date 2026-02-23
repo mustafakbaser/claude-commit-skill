@@ -12,11 +12,31 @@ Create precise, well-structured git commits with automatic change analysis and o
 Before doing anything else, display this table to the user:
 
 ```
-/commit       Staged changes → single commit. Nothing staged → auto batch mode.
-/commit --all Analyze all changes, group related ones into multiple logical commits.
+/commit            Staged changes → single commit. Nothing staged → auto batch mode. (English)
+/commit --all      Analyze all changes, group into multiple logical commits. (English)
+/commit -tr        Commit in Turkish / Türkçe commit mesajı
+/commit -en        Commit in English (default)
+/commit --all -tr  Batch mode in Turkish
+/commit --help     Show this help table and exit
+/commit -h         Show this help table and exit (short form)
 ```
 
-Then proceed to gather context.
+If the user passed `--help` or `-h`, **stop here** — do not proceed to the commit flow. The help table above is the complete output.
+
+Otherwise, proceed to gather context.
+
+## Step 0.5: Determine Language
+
+Parse the flags from the user's input:
+
+| Flag | Behavior |
+|------|----------|
+| `--help` / `-h` | Show help and exit |
+| `-tr` | Türkçe |
+| `-en` | English |
+| No flag | English (default) |
+
+The language flag can be combined with `--all` (e.g., `/commit --all -tr`). Store the chosen language for use in commit message generation.
 
 ## Step 1: Gather Context
 
@@ -85,10 +105,39 @@ Format: `type(scope): concise imperative description`
 - Be specific: "add retry logic for failed API calls" not "update API code"
 - Focus on WHAT and WHY, not HOW
 
-**Optional body** (for changes touching 5+ files or with non-obvious reasoning):
+**Body (always required, bullet-point format):**
 - Blank line after subject
+- Each bullet starts with `- `
+- Each bullet describes a single change/action
+- Imperative mood (EN: "add", "remove", "update" / TR: "ekle", "kaldır", "güncelle")
 - Wrap at 72 characters
-- Explain motivation, contrast with previous behavior
+
+**Language behavior:**
+
+| Flag | `type(scope):` | Subject line | Body bullets |
+|------|----------------|-------------|--------------|
+| `-en` / default | English | English | English |
+| `-tr` | English | Türkçe | Türkçe |
+
+The `type(scope):` prefix always stays in English (conventional commits standard).
+
+Example (Turkish):
+```
+feat(onboarding): compact layout ve dil seçici bottom sheet ekle
+
+- SingleChildScrollView yapısını kaldır, Spacer tabanlı responsive layout'a geç
+- Başlık fontunu 48→36, mosque ikonunu 80→64, spacing'leri küçült
+- Yerine tek dil butonu (bayrak + ad + ▼) ve modal bottom sheet ekle
+```
+
+Example (English):
+```
+feat(auth): add token refresh logic for expired sessions
+
+- Add automatic retry when access token returns 401
+- Store refresh token in secure storage instead of shared prefs
+- Remove manual logout on token expiry, replace with silent refresh
+```
 
 **NEVER include:**
 - Co-Authored-By lines
@@ -102,7 +151,9 @@ Format: `type(scope): concise imperative description`
 git commit -m "$(cat <<'EOF'
 type(scope): subject line
 
-Optional body.
+- First change description
+- Second change description
+- Third change description
 EOF
 )"
 ```
