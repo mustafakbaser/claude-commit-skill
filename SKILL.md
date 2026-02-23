@@ -17,16 +17,21 @@ Before doing anything else, display this table to the user:
 /commit -tr        Commit in Turkish / Türkçe commit mesajı
 /commit -en        Commit in English (default)
 /commit --all -tr  Batch mode in Turkish
+/commit --help     Show this help table and exit
+/commit -h         Show this help table and exit (short form)
 ```
 
-Then proceed to gather context.
+If the user passed `--help` or `-h`, **stop here** — do not proceed to the commit flow. The help table above is the complete output.
+
+Otherwise, proceed to gather context.
 
 ## Step 0.5: Determine Language
 
 Parse the flags from the user's input:
 
-| Flag | Language |
+| Flag | Behavior |
 |------|----------|
+| `--help` / `-h` | Show help and exit |
 | `-tr` | Türkçe |
 | `-en` | English |
 | No flag | English (default) |

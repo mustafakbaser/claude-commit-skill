@@ -32,6 +32,7 @@ After copying, restart Claude Code. The `/commit` command will be available glob
 | `/commit -tr` | Türkçe commit mesajı |
 | `/commit -en` | English commit (default) |
 | `/commit --all -tr` | Batch mode in Turkish |
+| `/commit --help` | Show available commands and flags |
 
 ### Single Commit Mode
 
