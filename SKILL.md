@@ -1,19 +1,19 @@
 ---
 name: commit
-description: Create intelligent git commits following Conventional Commits. Use when the user says "/commit", asks to commit changes, or wants to create git commits. Supports single commit mode (staged changes only) and batch mode (analyzes all changes, groups related ones into multiple logical commits). Triggers on "/commit", "/commit --all", "commit my changes", "commit this".
+description: Create intelligent git commits following Conventional Commits. Use when the user says "/commit", asks to commit changes, or wants to create git commits. Supports single commit mode (staged changes only) and batch mode (analyzes all changes, groups related ones into multiple logical commits). Asks language preference (TR/EN) for commit messages. Triggers on "/commit", "/commit --all", "commit my changes", "commit this".
 ---
 
 # Intelligent Commit
 
-Create precise, well-structured git commits with automatic change analysis and optional batch grouping.
+Create precise, well-structured git commits with automatic change analysis, interactive scope selection, and language support.
 
 ## Step 0: Show Usage Info
 
-Before doing anything else, display this table to the user:
+Before doing anything else, display this to the user:
 
 ```
-/commit       Staged changes → single commit. Nothing staged → auto batch mode.
-/commit --all Analyze all changes, group related ones into multiple logical commits.
+/commit       Analyze changes → ask preferences → commit.
+/commit --all Force batch mode for all changes.
 ```
 
 Then proceed to gather context.
@@ -33,17 +33,39 @@ git branch --show-current
 
 For large staged diffs (>500 lines total), use `git diff --cached --stat` first, then selectively read key files with `git diff --cached -- <file>`.
 
-## Step 2: Determine Mode
+## Step 2: Determine Scope & Language
 
-| Condition | Mode |
-|-----------|------|
-| User passed `--all` | **Batch** (all changes) |
-| Staged changes exist, no flag | **Single** (staged only) |
-| Nothing staged, unstaged/untracked exist | **Batch** (auto-detected, inform user) |
-| No changes at all | **Abort**: "No changes to commit." |
-| Merge conflict markers in status | **Abort**: "Resolve merge conflicts before committing." |
+Analyze `git status` output and follow this decision tree:
 
-When auto-switching to batch: inform the user "Nothing staged. Analyzing all changes for batch commit."
+### 2a: Check for changes
+
+- **No changes at all** → Abort: "No changes to commit."
+- **Merge conflict markers in status** → Abort: "Resolve merge conflicts before committing."
+
+### 2b: Determine commit scope
+
+| Situation | Action |
+|-----------|--------|
+| User passed `--all` | Batch mode, skip scope question |
+| ONLY staged changes exist | Single mode, skip scope question |
+| ONLY unstaged/untracked exist | Batch mode, skip scope question |
+| BOTH staged AND unstaged exist | **Ask user** (see below) |
+
+When both staged and unstaged changes exist, ask the user using AskUserQuestion:
+
+**Question:** "Both staged and unstaged changes detected. What would you like to commit?"
+**Options:**
+1. "Only staged changes" → Single mode (staged only)
+2. "All changes" → Batch mode (stage everything, group logically)
+
+### 2c: Ask language
+
+After scope is determined, ask the user using AskUserQuestion:
+
+**Question:** "Commit message language?"
+**Options:**
+1. "EN" — English
+2. "TR" — Turkish (subject stays English per Conventional Commits, body in Turkish)
 
 ## Single Commit Mode
 
@@ -77,18 +99,40 @@ Format: `type(scope): concise imperative description`
 - Omit scope if changes span 3+ unrelated modules
 - Match scopes used in recent `git log` output when applicable
 
-**Message rules:**
+**Subject line rules:**
+- Always in English (Conventional Commits standard, regardless of language choice)
 - Imperative mood ("add", "fix", "update" — not "added", "fixes", "updates")
 - Lowercase first letter after colon
 - Max 72 characters total (type + scope + description)
 - No trailing period
 - Be specific: "add retry logic for failed API calls" not "update API code"
-- Focus on WHAT and WHY, not HOW
 
-**Optional body** (for changes touching 5+ files or with non-obvious reasoning):
+**Body rules — include body when changes touch 2+ files or diff exceeds 30 lines:**
 - Blank line after subject
 - Wrap at 72 characters
-- Explain motivation, contrast with previous behavior
+- Summarize: what changed, why, and key details
+- Use bullet points for multiple distinct changes
+- Write body in the user's chosen language (EN or TR)
+
+**EN example:**
+```
+feat(contracts): add PDF generation for contract renewals
+
+- Add PDF generation support for contract renewal workflows
+- New template system supports all 7 contract types
+- PDF generation runs asynchronously via Edge Functions
+- Upload generated files to Supabase Storage with signed URLs
+```
+
+**TR example:**
+```
+feat(contracts): add PDF generation for contract renewals
+
+- Sözleşme yenileme işlemleri için PDF oluşturma desteği eklendi
+- Yeni şablon sistemi ile 7 farklı sözleşme tipi destekleniyor
+- Edge Function üzerinden asenkron PDF üretimi yapılıyor
+- Oluşturulan dosyalar signed URL ile Supabase Storage'a yükleniyor
+```
 
 **NEVER include:**
 - Co-Authored-By lines
@@ -102,7 +146,8 @@ Format: `type(scope): concise imperative description`
 git commit -m "$(cat <<'EOF'
 type(scope): subject line
 
-Optional body.
+- Body point 1
+- Body point 2
 EOF
 )"
 ```
@@ -159,7 +204,7 @@ For each group in order:
 
 1. Reset staging area: `git reset` (only if previous staging exists)
 2. Stage group files: `git add <file1> <file2> ...`
-3. Generate commit message (same rules as single mode)
+3. Generate commit message (same rules as single mode, using chosen language)
 4. Execute: `git commit -m "..."`
 5. Verify: `git status`
 
