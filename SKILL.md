@@ -7,17 +7,6 @@ description: Create intelligent git commits following Conventional Commits. Use 
 
 Create precise, well-structured git commits with automatic change analysis, interactive scope selection, and language support.
 
-## Step 0: Show Usage Info
-
-Before doing anything else, display this to the user:
-
-```
-/commit       Analyze changes → ask preferences → commit.
-/commit --all Force batch mode for all changes.
-```
-
-Then proceed to gather context.
-
 ## Step 1: Gather Context
 
 Run these commands in parallel:
