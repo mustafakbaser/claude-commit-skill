@@ -1,8 +1,11 @@
 {
   "name": "claude-commit-skill",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Intelligent Commit skill for Claude Code — Conventional Commits with interactive language selection and batch grouping",
   "bin": "./bin.js",
+  "scripts": {
+    "postinstall": "node bin.js"
+  },
   "files": [
     "bin.js",
     "SKILL.md",
