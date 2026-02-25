@@ -14,7 +14,13 @@ A Claude Code skill that analyzes git changes, asks your preferences, and create
 
 ## Installation
 
-Clone the repository and copy the skill into your Claude Code skills directory:
+### Quick Install (npx)
+
+```bash
+npx claude-commit-skill
+```
+
+### Manual Install
 
 ```bash
 git clone https://github.com/mustafakbaser/claude-commit-skill.git
@@ -22,7 +28,7 @@ mkdir -p ~/.claude/skills/commit
 cp -r claude-commit-skill/SKILL.md claude-commit-skill/references ~/.claude/skills/commit/
 ```
 
-Restart Claude Code. The `/commit` command will be available globally across all projects.
+Restart Claude Code after installation. The `/commit` command will be available globally across all projects.
 
 ## How It Works
 

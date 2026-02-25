@@ -1,0 +1,26 @@
+{
+  "name": "claude-commit-skill",
+  "version": "1.0.0",
+  "description": "Intelligent Commit skill for Claude Code — Conventional Commits with interactive language selection and batch grouping",
+  "bin": "./bin.js",
+  "files": [
+    "bin.js",
+    "SKILL.md",
+    "references/"
+  ],
+  "keywords": [
+    "claude-code",
+    "claude",
+    "skill",
+    "commit",
+    "conventional-commits",
+    "git"
+  ],
+  "author": "Mustafa Kürşad Başer",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mustafakbaser/claude-commit-skill.git"
+  },
+  "homepage": "https://github.com/mustafakbaser/claude-commit-skill"
+}
