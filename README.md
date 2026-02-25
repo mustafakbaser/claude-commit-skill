@@ -20,6 +20,10 @@ A Claude Code skill that analyzes git changes, asks your preferences, and create
 npx claude-commit-skill
 ```
 
+This downloads the package, runs the installer script, and copies the skill files to `~/.claude/skills/commit/`. No manual steps needed.
+
+> **Note:** Use `npx`, not `npm install`. `npx` runs the installer automatically. `npm install` only downloads the package without installing the skill.
+
 ### Manual Install
 
 ```bash
@@ -28,7 +32,9 @@ mkdir -p ~/.claude/skills/commit
 cp -r claude-commit-skill/SKILL.md claude-commit-skill/references ~/.claude/skills/commit/
 ```
 
-Restart Claude Code after installation. The `/commit` command will be available globally across all projects.
+### After Installation
+
+Restart Claude Code. The `/commit` command will be available globally across all projects.
 
 ## How It Works
 
