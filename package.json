@@ -2,7 +2,9 @@
   "name": "claude-commit-skill",
   "version": "2.0.0",
   "description": "Intelligent Commit skill for Claude Code — convention-aware Conventional Commits with secret screening, merge/rebase safety, BREAKING CHANGE handling and batch grouping",
-  "bin": "./bin.js",
+  "bin": {
+    "claude-commit-skill": "bin.js"
+  },
   "scripts": {
     "postinstall": "node bin.js"
   },
@@ -28,7 +30,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mustafakbaser/claude-commit-skill.git"
+    "url": "git+https://github.com/mustafakbaser/claude-commit-skill.git"
   },
   "homepage": "https://github.com/mustafakbaser/claude-commit-skill"
 }
