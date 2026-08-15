@@ -1,139 +1,92 @@
 # claude-commit-skill
 
-A Claude Code skill that analyzes git changes, asks your preferences, and creates well-structured commits following the [Conventional Commits](https://www.conventionalcommits.org/) specification.
+A `/commit` skill for [Claude Code](https://claude.com/claude-code) that writes commits matching **your repository's** convention, and refuses to write ones that would cost you something.
 
-## Features
+Most commit tools generate a message from the diff. This one starts by asking whether committing is safe at all — then reads the repo's `commitlint` config, its `git log`, and its release tooling before deciding what a correct message even looks like here.
 
-- **Interactive scope selection** — when both staged and unstaged changes exist, asks whether to commit only staged or all changes
-- **Language support (EN / TR)** — always asks your preferred language before generating messages. Subject line stays English per Conventional Commits standard; body is written in the chosen language
-- **Rich commit messages** — generates detailed body with bullet points when changes touch 2+ files or diff exceeds 30 lines
-- **Batch commit grouping** — in batch mode, groups unrelated changes into separate logical commits by module, file affinity, and change intent
-- **Smart file pairing** — keeps related files together: implementation + test, component + styles, manifest + lock file, migration + rollback
-- **Conventional Commits** — proper type selection (`feat`, `fix`, `refactor`, `perf`, `chore`, `docs`, `test`, `ci`, `security`, `revert`, `style`)
-- **Edge case handling** — binary files, large diffs, lock files, merge conflicts, pre-commit hook failures, submodule changes
-
-## Installation
-
-### Quick Install (npx)
+## Install
 
 ```bash
 npx claude-commit-skill
 ```
 
-This downloads the package, runs the installer script, and copies the skill files to `~/.claude/skills/commit/`. No manual steps needed.
+Restart Claude Code, then use `/commit`.
 
-> **Note:** Use `npx`, not `npm install`. `npx` runs the installer automatically. `npm install` only downloads the package without installing the skill.
+Manual install: copy `SKILL.md`, `references/`, and `scripts/` into `~/.claude/skills/commit/`, and make `scripts/preflight.sh` executable.
 
-### Manual Install
-
-```bash
-git clone https://github.com/mustafakbaser/claude-commit-skill.git
-mkdir -p ~/.claude/skills/commit
-cp -r claude-commit-skill/SKILL.md claude-commit-skill/references ~/.claude/skills/commit/
-```
-
-### After Installation
-
-Restart Claude Code. The `/commit` command will be available globally across all projects.
-
-## How It Works
-
-When you run `/commit`, the skill follows this flow:
+## Usage
 
 ```
-1. Gather context (git status, diff, recent commits)
-2. Determine scope:
-   ├─ Only staged changes exist     → single commit mode
-   ├─ Only unstaged changes exist   → batch mode
-   ├─ Both staged & unstaged exist  → asks: "Only staged" or "All changes"
-   ├─ No changes                    → abort
-   └─ Merge conflicts               → abort
-3. Ask language preference: EN or TR
-4. Analyze changes and generate commit message(s)
-5. Execute and verify
+/commit                  analyze and commit
+/commit --all            group everything into several logical commits
+/commit --dry-run        show the message, commit nothing
+/commit --amend          amend the last commit (warns if already pushed)
+/commit --push           push after all commits succeed
+/commit --signoff        add a DCO Signed-off-by trailer
+/commit --lang=tr        force the description language
+/commit --yes            skip confirmations (safety gates still apply)
 ```
 
-### Single Commit Mode
+It also triggers on plain language — "commit my changes", "değişiklikleri commit et".
 
-Commits staged changes with a detailed message:
+## What it refuses to do
 
-**EN:**
+These are full stops, not warnings:
+
+- **Commit during a merge or rebase.** Re-staging mid-merge deletes `MERGE_HEAD`, and the resulting commit records one parent — the merge silently vanishes from history while the branch still reads as unmerged. Nothing in `git status` reveals this: once the conflict is resolved and staged, it looks like an ordinary modified file.
+- **Stage a credential.** `.env`, private keys, `serviceAccount.json`, and files containing AWS/GitHub/Slack/OpenAI/Stripe key patterns are flagged before anything is staged. A pushed secret is compromised — rewriting history does not un-leak it.
+- **Silently discard hand-picked hunks.** If you staged part of a file with `git add -p`, batch mode names the file and asks first. There is no index reflog; that selection is not recoverable.
+- **Commit to a detached HEAD** without confirmation, or write a >10 MB blob into history without confirmation.
+
+It warns, but proceeds, on protected branches, junk files, and force-added ignored files.
+
+## What it reads before writing
+
+| Source | Used for |
+|---|---|
+| `commitlint --print-config json` | Allowed types, header length, scope enum, whether `!` is parsed |
+| `.czrc`, `cz.config.js` | Custom type lists, emoji settings, length limits |
+| `git log` (300 commits) | House convention, and the repo's real scope vocabulary |
+| `.gitmessage` | Project message template |
+| `.changeset/`, `release-please-config.json`, `.releaserc`, `cliff.toml`, `nx.json` | Whether the chosen type actually ships a release |
+
+If the repo doesn't use Conventional Commits, the skill matches what the repo actually does instead of imposing a convention on it.
+
+## Things it gets right that are easy to get wrong
+
+**Breaking changes are written twice.** Both `feat!:` and a `BREAKING CHANGE:` footer. Under semantic-release's default preset, `feat!:` alone produces **no release at all** — the header pattern has no `!` in it, so the type parses as null and the commit is dropped. The footer alone is missed by other parsers. Writing both is spec-legal and safe everywhere.
+
+**Release impact is stated.** Under semantic-release a `chore:` ships nothing; under release-please the same commit bumps a patch. The skill names the tool and says which happens.
+
+**changesets repos get a changeset.** There, commit messages don't affect versioning at all — versions come from `.changeset/*.md`. The skill offers to write one.
+
+**Filenames survive.** `git status --porcelain` octal-escapes non-ASCII names, collapses new directories to a single entry, and puts two paths on one line for renames. The bundled `scripts/preflight.sh` parses it with NUL framing and `core.quotepath=false`, so `türkçe-ödeme.txt`, `日本語.txt`, `my dir/file with space.txt`, and renames all come through intact.
+
+**The message can't inject shell.** Commits go through `git commit -F <file>`, never a heredoc. A body line reading `EOF` would otherwise truncate the message and execute the rest as shell — while the commit still succeeded.
+
+**Hook side effects are caught.** Formatters that rewrite files during `pre-commit` leave the committed content unformatted and the tree dirty. `commit-msg` hooks can rewrite the message entirely. Both are detected and verified after the fact with `git log -1 --format=%B`.
+
+## Batch mode
+
+Groups related files into 2–5 commits, shows the full plan, and waits for approval before writing anything. Each group is staged by explicit pathspec — there is no blanket `git reset` between commits.
+
+If a commit fails mid-batch, it stops immediately and reports what landed, what is staged, and what remains, with an offer to unwind.
+
+Grouping is honest about its limits: it has no import-graph analysis, so intermediate commits may not build. That's stated in the plan.
+
+## Structure
+
 ```
-feat(contracts): add PDF generation for contract renewals
-
-- Add PDF generation support for contract renewal workflows
-- New template system supports all 7 contract types
-- PDF generation runs asynchronously via Edge Functions
-- Upload generated files to Supabase Storage with signed URLs
+SKILL.md                            decision tree, safety gates, execution
+scripts/preflight.sh                repo state + inventory + screens, as JSON
+references/message-format.md        types, subject/body, BREAKING CHANGE, footers
+references/repo-conventions.md      config detection, release tooling behavior
+references/grouping-algorithm.md    batch grouping
+references/recovery.md              hook failures, partial batches, amending
 ```
 
-**TR:**
-```
-feat(contracts): add PDF generation for contract renewals
-
-- Sözleşme yenileme işlemleri için PDF oluşturma desteği eklendi
-- Yeni şablon sistemi ile 7 farklı sözleşme tipi destekleniyor
-- Edge Function üzerinden asenkron PDF üretimi yapılıyor
-- Oluşturulan dosyalar signed URL ile Supabase Storage'a yükleniyor
-```
-
-### Batch Commit Mode
-
-When nothing is staged or `--all` is passed, the skill groups all changes by logical affinity, presents a commit plan, and waits for your approval before executing:
-
-```
-Proposed commits:
-
-1. feat(wizard): add discount calculation to pricing step
-   - src/components/wizard/PricingStep.tsx
-   - src/lib/pricing.ts
-
-2. fix(db): correct meeting balance view
-   - supabase/migrations/20250102_fix_balance.sql
-
-3. chore: update dependencies
-   - package.json
-   - package-lock.json
-```
-
-Each commit in the batch follows the same message rules and language preference.
-
-## Commit Message Format
-
-| Rule | Detail |
-|------|--------|
-| Format | `type(scope): imperative description` |
-| Subject | Always English, max 72 characters, imperative mood |
-| Body | In chosen language (EN/TR), included when 2+ files or >30 line diff |
-| Body style | Bullet points summarizing what changed and why |
-| Scope | Derived from primary module (`db`, `ui`, `api`, `auth`, etc.) |
-| Omitted scope | When changes span 3+ unrelated modules |
-
-Supported types: `feat`, `fix`, `refactor`, `perf`, `style`, `docs`, `test`, `chore`, `ci`, `security`, `revert`
-
-## Batch Grouping Algorithm
-
-The grouping runs in five phases:
-
-1. **Affinity pairing** — implementation + test, component + styles, manifest + lock file, migration + rollback
-2. **Directory clustering** — group by shared path prefix (first 2 segments)
-3. **Semantic separation** — feature vs fix vs refactor vs config vs docs vs database
-4. **Balancing** — merge single-file groups, split oversized ones (target: 2–5 commits, max 7)
-5. **Ordering** — infrastructure → database/schema → features → fixes → tests → docs
-
-See [references/grouping-algorithm.md](references/grouping-algorithm.md) for the full specification.
-
-## Edge Cases
-
-| Scenario | Behavior |
-|----------|----------|
-| Binary files | Included in commit, content not analyzed |
-| Lock files | Always grouped with their manifest file |
-| Large diffs (>1000 lines) | Uses `--stat` + partial read for context |
-| Untracked files only | Staged and committed as `feat` or `chore` |
-| Pre-commit hook failure | Reports error, does not retry or use `--no-verify` |
-| Merge conflicts | Aborts with message to resolve first |
+`preflight.sh` is plain POSIX-ish bash targeting bash 3.2 (what macOS ships) with no dependencies.
 
 ## License
 
-MIT
+MIT © Mustafa Kürşad Başer
