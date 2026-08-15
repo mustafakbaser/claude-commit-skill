@@ -1,223 +1,109 @@
 ---
 name: commit
-description: Create intelligent git commits following Conventional Commits. Use when the user says "/commit", asks to commit changes, or wants to create git commits. Supports single commit mode (staged changes only) and batch mode (analyzes all changes, groups related ones into multiple logical commits). Asks language preference (TR/EN) for commit messages. Triggers on "/commit", "/commit --all", "commit my changes", "commit this".
+description: Creates safe, convention-accurate git commits. Reads the repository's own convention (commitlint, commitizen, gitmoji, or the style of its git history) instead of imposing one, screens for secrets and repository states where re-staging destroys work, and writes Conventional Commits messages with correct BREAKING CHANGE and issue footers. Offers a single commit or a batch mode that splits unrelated work into several logical commits, previewed and approved before anything is written. Use this skill whenever the user wants to commit, stage, or record changes in git — "/commit", "/commit --all", "commit my changes", "commit this", "git commit", "değişiklikleri commit et", "commit at" — and whenever the user asks for a commit message, even when they never use the word "commit".
+license: MIT
+argument-hint: "[--all] [--amend] [--dry-run] [--push] [--signoff] [--lang=xx] [--yes]"
+allowed-tools: Bash(git:*) Bash(${CLAUDE_SKILL_DIR}/scripts/preflight.sh) Bash(npx commitlint:*) Read Write
+metadata:
+  version: "2.0.0"
 ---
 
 # Intelligent Commit
 
-Create precise, well-structured git commits with automatic change analysis, interactive scope selection, and language support.
+Commits are append-only and, once pushed, effectively permanent. The costly mistakes are not badly-worded messages — they are commits that contain content the author never reviewed, credentials that are now compromised, and merges silently converted into ordinary commits. Guard against those first; write a good message second.
 
-## Step 1: Gather Context
+## Step 1: Preflight
 
-Run these commands in parallel:
-
-```bash
-git status
-git diff --cached --stat
-git diff --cached
-git diff --stat
-git log --oneline -10
-git branch --show-current
-```
-
-For large staged diffs (>500 lines total), use `git diff --cached --stat` first, then selectively read key files with `git diff --cached -- <file>`.
-
-## Step 2: Determine Scope & Language
-
-Analyze `git status` output and follow this decision tree:
-
-### 2a: Check for changes
-
-- **No changes at all** → Abort: "No changes to commit."
-- **Merge conflict markers in status** → Abort: "Resolve merge conflicts before committing."
-
-### 2b: Determine commit scope
-
-| Situation | Action |
-|-----------|--------|
-| User passed `--all` | Batch mode, skip scope question |
-| ONLY staged changes exist | Single mode, skip scope question |
-| ONLY unstaged/untracked exist | Batch mode, skip scope question |
-| BOTH staged AND unstaged exist | **Ask user** (see below) |
-
-When both staged and unstaged changes exist, ask the user using AskUserQuestion:
-
-**Question:** "Both staged and unstaged changes detected. What would you like to commit?"
-**Options:**
-1. "Only staged changes" → Single mode (staged only)
-2. "All changes" → Batch mode (stage everything, group logically)
-
-### 2c: Ask language
-
-After scope is determined, ask the user using AskUserQuestion:
-
-**Question:** "Commit message language?"
-**Options:**
-1. "EN" — English
-2. "TR" — Turkish (subject stays English per Conventional Commits, body in Turkish)
-
-## Single Commit Mode
-
-### Analyze
-
-Read `git diff --cached` output. Skip binary file contents. For lock files (package-lock.json, yarn.lock, etc.), note their presence but do not base the message on their contents.
-
-### Generate Commit Message
-
-Format: `type(scope): concise imperative description`
-
-**Type selection:**
-
-| Type | When |
-|------|------|
-| `feat` | New functionality or capability |
-| `fix` | Bug fix or error correction |
-| `refactor` | Code restructuring, no behavior change |
-| `perf` | Performance improvement |
-| `style` | Formatting, whitespace only |
-| `docs` | Documentation only |
-| `test` | Adding or updating tests |
-| `chore` | Build, tooling, dependencies, config |
-| `ci` | CI/CD pipeline changes |
-| `security` | Security hardening or vulnerability fix |
-| `revert` | Reverting a previous commit |
-
-**Scope rules:**
-- Derive from the primary directory or module affected
-- Lowercase, single word when possible: `db`, `ui`, `api`, `auth`, `wizard`, `pdf`
-- Omit scope if changes span 3+ unrelated modules
-- Match scopes used in recent `git log` output when applicable
-
-**Subject line rules:**
-- Always in English (Conventional Commits standard, regardless of language choice)
-- Imperative mood ("add", "fix", "update" — not "added", "fixes", "updates")
-- Lowercase first letter after colon
-- Max 72 characters total (type + scope + description)
-- No trailing period
-- Be specific: "add retry logic for failed API calls" not "update API code"
-
-**Body rules — include body when changes touch 2+ files or diff exceeds 30 lines:**
-- Blank line after subject
-- Wrap at 72 characters
-- Summarize: what changed, why, and key details
-- Use bullet points for multiple distinct changes
-- Write body in the user's chosen language (EN or TR)
-
-**EN example:**
-```
-feat(contracts): add PDF generation for contract renewals
-
-- Add PDF generation support for contract renewal workflows
-- New template system supports all 7 contract types
-- PDF generation runs asynchronously via Edge Functions
-- Upload generated files to Supabase Storage with signed URLs
-```
-
-**TR example:**
-```
-feat(contracts): add PDF generation for contract renewals
-
-- Sözleşme yenileme işlemleri için PDF oluşturma desteği eklendi
-- Yeni şablon sistemi ile 7 farklı sözleşme tipi destekleniyor
-- Edge Function üzerinden asenkron PDF üretimi yapılıyor
-- Oluşturulan dosyalar signed URL ile Supabase Storage'a yükleniyor
-```
-
-**NEVER include:**
-- Co-Authored-By lines
-- AI/tool attribution ("Generated by", "Created with")
-- Emoji in commit messages
-- Vague messages ("update code", "fix stuff", "minor changes")
-
-### Execute
+Run the bundled script. It returns one JSON object with repository state, a correctly-parsed file inventory, line counts, safety screens, and the repo's detected conventions:
 
 ```bash
-git commit -m "$(cat <<'EOF'
-type(scope): subject line
-
-- Body point 1
-- Body point 2
-EOF
-)"
+"${CLAUDE_SKILL_DIR}/scripts/preflight.sh"
 ```
 
-Run `git status` after to verify success and display the result.
+Read its output rather than re-deriving any of it by hand. It exists because `git status --porcelain` is not a list of paths: `core.quotepath` octal-escapes non-ASCII names, untracked directories collapse to a single entry that hides every file inside, and a rename is one line carrying two paths. Parsing that in prose gets it wrong.
 
-## Batch Commit Mode
+If it exits non-zero, the directory is not a git repository — say so and stop.
 
-### Step 1: Inventory Changes
+## Step 2: Safety gates
 
-```bash
-git status --porcelain
-```
+Evaluate in order. Each is a full stop, not a warning to pass along with the work already done.
 
-Parse each line: status code + file path.
+**Operation in progress** (`in_progress.any`) — refuse batch mode outright. A mixed `git reset` deletes `MERGE_HEAD`, and the commit that follows records one parent: the merge disappears from history while the branch still reads as unmerged, and the next merge re-conflicts. The same reset mid-rebase strands the rebase's own commits on a detached HEAD. Nothing in the file list reveals this — once the conflict is resolved and staged, status reads `M  file` like any ordinary change. Offer only a plain `git commit` that preserves the operation, and let git supply its default message.
 
-### Step 2: Group Changes
+**Conflicts unresolved** (`counts.conflicted > 0`) — stop. Resolve first.
 
-Read `references/grouping-algorithm.md` for the detailed grouping procedure.
+**Detached HEAD** (`head.detached`) — stop unless the user confirms. Commits here are unreachable from any branch and are lost at the next checkout.
 
-**Quick summary:** Group files by logical affinity:
-1. Co-dependent files (implementation + test, component + styles)
-2. Manifest + lock file pairs (package.json + package-lock.json)
-3. Same feature/module directory
-4. Same change type (all config, all docs)
-5. Remaining files form catch-all group
+**Secrets** (`screens.secrets`) — stop and list them. Never stage a flagged path without an explicit instruction naming that file. A pushed credential is compromised regardless of what happens next: rewriting history does not un-leak it, because forks, clones, CI caches, and cached views keep serving the blob. The remedy order is rotate the credential first, rewrite history second. Offer to add the path to `.gitignore` instead.
 
-Target: 2-5 commits. Never exceed 7. If only 1 group results, fall back to single commit mode.
+**Large files** (`screens.large_files`) — stop and confirm. Git history is append-only, so the blob is in every future clone forever, and hosts reject oversized files at push time, once the commits already exist.
 
-### Step 3: Present Plan
+**Protected branch** (`head.protected`) — say which branch and offer to create a feature branch first. Proceed if the user wants it; this is a warning, not a veto.
 
-Display the commit plan before executing:
+**Junk and force-added files** (`screens.junk`, `screens.force_added_ignored`) — mention them. Junk (`.DS_Store`, `node_modules/`, build output) usually belongs in `.gitignore`. Force-added ignored files were staged deliberately, so preserve them: they are the files a blanket re-stage would silently drop.
 
-```
-Proposed commits:
+## Step 3: Decide mode
 
-1. feat(wizard): add discount calculation to pricing step
-   - src/components/wizard/PricingStep.tsx
-   - src/lib/pricing.ts
+| State | Mode |
+|---|---|
+| `--all` passed | Batch |
+| `--amend` passed | Amend (see below) |
+| Only staged changes | Single |
+| Only unstaged or untracked | Batch |
+| Both staged and unstaged | Ask |
 
-2. fix(db): correct meeting balance view
-   - supabase/migrations/20250102_fix_balance.sql
+When both exist, ask with AskUserQuestion: commit only what is staged, or everything grouped into logical commits.
 
-3. chore: update dependencies
-   - package.json
-   - package-lock.json
-```
+**Before offering "everything", check `partially_staged`.** A non-empty list means hunks were hand-picked with `git add -p`. There is no index reflog, so that selection cannot be recovered — name the affected files and confirm before touching the index. Never resolve this by re-staging whole files: that commits the hunks the author deliberately withheld, under a message describing something else.
 
-Ask: **"Proceed with these commits?"** and wait for user confirmation.
+Non-interactive sessions have no one to ask: default to staged-only, and to English, and say which defaults were used.
 
-### Step 4: Execute Sequentially
+## Step 4: Resolve the convention
 
-For each group in order:
+The repository's own tooling outranks any default here — its `commit-msg` hook is what actually accepts or rejects the message. Read `references/repo-conventions.md` when `conventions` or `release_tooling` in the preflight output has any non-null field. It covers reading commitlint's resolved config, non-Conventional-Commits repositories, and which types do and do not trigger a release under each release tool.
 
-1. Reset staging area: `git reset` (only if previous staging exists)
-2. Stage group files: `git add <file1> <file2> ...`
-3. Generate commit message (same rules as single mode, using chosen language)
-4. Execute: `git commit -m "..."`
-5. Verify: `git status`
+With no configuration present, infer from `history.recent_subjects`: if most subjects match `^type(scope)?!?: `, use Conventional Commits; otherwise match the house style rather than imposing one. Draw scope candidates from `history.top_scopes` — that is the repo's real vocabulary, not a guess.
 
-**If any commit fails** (pre-commit hook, etc.): stop immediately, report the error, do NOT continue to next group. Never use `--no-verify` unless the user explicitly requests it.
+## Step 5: Write the message
 
-### Step 5: Summary
+Read `references/message-format.md` for the type table, subject and body rules, BREAKING CHANGE syntax, and footers. Load it before writing any message; the breaking-change rules in particular are not intuitive and getting them wrong silently changes what version ships.
 
-After all commits succeed:
+Two things the diff cannot tell you, which decide message quality:
 
-```
-Created 3 commits:
-  abc1234 feat(wizard): add discount calculation to pricing step
-  def5678 fix(db): correct meeting balance view
-  ghi9012 chore: update dependencies
-```
+- **The why.** A diff shows what changed; it cannot show why the change was chosen. When this conversation contains that reasoning — a bug reproduced, a constraint discovered, an approach rejected — put it in the body. It is the single most valuable thing available here and nowhere else. Research on commit quality finds the missing "why" to be the most common defect in real-world messages, and the "what" is the half the diff already covers.
+- **Whether it should be one commit.** If the draft subject needs an "and", or the body grows to cover two unrelated justifications, it is two commits.
 
-## Edge Cases
+## Step 6: Execute
 
-| Scenario | Handling |
-|----------|----------|
-| Binary files | Include in commit, do not analyze content, note as "add/update binary assets" |
-| Lock files | Always group with their manifest file, never standalone commit |
-| Very large diffs (>1000 lines/file) | Use `--stat` + read first 100 lines for context |
-| Untracked files only | Stage and commit normally, usually `feat` or `chore` |
-| Submodule changes | Note in message, do not analyze submodule internals |
-| Pre-commit hook failure | Report clearly, do NOT retry, suggest user fix and re-run `/commit` |
-| Empty staging after auto-detect | Switch to batch mode, inform user |
+Write the message to a file and commit with `-F`. Do not use `-m` with a heredoc: a body line that happens to read `EOF` terminates the heredoc early, truncating the message and executing the remaining lines as shell commands — and the commit still succeeds, so the corruption is silent. Since the body is written from diff content, that is a content-driven injection path, not a formatting nit. The file form also avoids `-m "..."` breaking on any quote, backtick, or `$` in the message, and works under PowerShell.
+
+1. Write the message with the Write tool to a scratch path.
+2. Stage with an explicit path list, always after `--`: `git add -- <path> <path>`. Without the separator, a file named `-weird.txt` is parsed as options, and pathspec magic like `:(glob)` becomes an injection surface.
+3. `git commit -F <message-file>`
+4. Check the **exit code**. A clean `git status` does not mean success — a dirty tree is equally consistent with a hook rewriting files, a signing failure, or an empty commit.
+5. Verify what actually landed: `git log -1 --format='%H %s'`. A `commit-msg` hook is allowed to rewrite the message in place, so the message committed is not necessarily the message written.
+6. Compare the tree against the expected post-commit state. If files the hook touched are now dirty, a formatter rewrote them *after* the snapshot was taken, so the commit holds the unformatted version — read `references/recovery.md` and stop rather than sweeping the leftovers into the next commit.
+
+Never pass `--no-verify` unless the user explicitly asks. It skips exactly the `pre-commit` and `commit-msg` gates the team installed on purpose, including local secret scanning, and does not skip server-side hooks — so it usually just relocates the failure to push time, after history is built on top.
+
+## Batch mode
+
+1. Group the files. Read `references/grouping-algorithm.md`.
+2. Present the plan — every group, its files, and its proposed subject — and wait for approval. State plainly that intermediate commits may not build: grouping has no import-graph awareness, so a caller and callee can land in different commits.
+3. Commit groups one at a time, staging each group by explicit pathspec. **Do not run a blanket `git reset` between groups.** Stage only that group's paths, and unstage with `git restore --staged -- <paths>` scoped to the same list.
+4. Record the short SHA after each commit.
+5. On any failure, stop immediately and report what landed, what is staged, and what remains — see `references/recovery.md`. Never continue to the next group.
+
+Target 2–5 commits; more than 7 means the grouping is too fine. One group means single mode.
+
+## Flags
+
+| Flag | Effect |
+|---|---|
+| `--all` | Batch mode over every change |
+| `--amend` | Amend the last commit. Check `head.ahead` first — amending a pushed commit rewrites published history; warn and confirm. |
+| `--dry-run` | Show the message and file list, commit nothing |
+| `--push` | Offer to push after all commits succeed |
+| `--signoff` | Add `Signed-off-by`. Only on request or when the repo requires DCO — it is a legal attestation in the committer's name, not a formatting option. |
+| `--lang=xx` | Description language. Otherwise inferred from history. |
+| `--yes` | Skip confirmations. Safety gates in Step 2 still apply. |
