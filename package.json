@@ -1,7 +1,7 @@
 {
   "name": "claude-commit-skill",
-  "version": "1.0.1",
-  "description": "Intelligent Commit skill for Claude Code — Conventional Commits with interactive language selection and batch grouping",
+  "version": "2.0.0",
+  "description": "Intelligent Commit skill for Claude Code — convention-aware Conventional Commits with secret screening, merge/rebase safety, BREAKING CHANGE handling and batch grouping",
   "bin": "./bin.js",
   "scripts": {
     "postinstall": "node bin.js"
@@ -9,14 +9,19 @@
   "files": [
     "bin.js",
     "SKILL.md",
-    "references/"
+    "references/",
+    "scripts/"
   ],
+  "engines": {
+    "node": ">=14"
+  },
   "keywords": [
     "claude-code",
     "claude",
     "skill",
     "commit",
     "conventional-commits",
+    "commitlint",
     "git"
   ],
   "author": "Mustafa Kürşad Başer",
